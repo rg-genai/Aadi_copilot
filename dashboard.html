@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aadi - Financial Co-Pilot</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --background-color: #0a0a0a;
+            --surface-color: #1a1a1a;
+            --primary-color: #00c853;
+            --on-surface-color: #e0e0e0;
+            --on-surface-variant-color: #9e9e9e;
+            --border-color: #2c2c2c;
+            /* Chart Colors */
+            --chart-color-1: rgba(0, 200, 83, 0.8);
+            --chart-color-2: rgba(41, 98, 255, 0.8);
+            --chart-color-3: rgba(255, 171, 0, 0.8);
+            --chart-color-4: rgba(255, 61, 13, 0.8);
+            --chart-color-5: rgba(170, 0, 255, 0.8);
+            --chart-color-6: rgba(213, 0, 0, 0.7);
+        }
+
+        html, body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--on-surface-color);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .page-header {
+            display: flex;
+            align-items: center;
+            padding: 15px 30px;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        .header-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%; /* This keeps the image container circular */
+    margin-right: 20px;
+    object-fit: contain; /* This ensures the logo fits inside without stretching */
+}
+        .header-title h1 { font-size: 1.5rem; margin: 0; font-weight: 600; }
+        .header-title p { font-size: 0.9rem; margin: 2px 0 0 0; color: var(--on-surface-variant-color); }
+
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .dashboard-container {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: 1fr 1.2fr 1fr;
+            grid-template-rows: repeat(2, 1fr);
+            grid-template-areas:
+                "assets net-worth liabilities"
+                "epf net-worth transactions";
+            gap: 20px;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #000;
+        }
+        .card {
+            background-color: var(--surface-color);
+            padding: 25px;
+            border-radius: 16px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .card-title {
+            margin: 0 0 15px 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--on-surface-variant-color);
+            text-align: center;
+            flex-shrink: 0;
+        }
+        
+        .chart-container {
+            flex-grow: 1;
+            position: relative;
+            min-height: 150px;
+        }
+
+        #net-worth-card {
+            grid-area: net-worth;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+        }
+        .net-worth-gauge-container {
+            width: 70%;
+            max-width: 220px;
+            flex-shrink: 0;
+        }
+        .net-worth-primary-value {
+            font-size: 2.8rem;
+            font-weight: 700;
+            line-height: 1.2;
+            color: var(--primary-color);
+            margin-top: -15px;
+        }
+        .net-worth-label {
+            font-size: 1rem;
+            color: var(--on-surface-variant-color);
+            margin-bottom: 25px;
+        }
+        .net-worth-sub-metrics {
+            display: flex;
+            justify-content: space-around;
+            width: 100%;
+            text-align: center;
+        }
+        .sub-metric .value { font-size: 1.2rem; font-weight: 600; }
+        .sub-metric .label { font-size: 0.8rem; color: var(--on-surface-variant-color); margin-top: 4px;}
+
+        .resizer { flex-shrink: 0; width: 100%; height: 10px; background-color: #000; cursor: ns-resize; position: relative; }
+        .resizer::before { content: ''; position: absolute; top: 4px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; background-color: var(--border-color); border-radius: 2px; }
+
+        .chat-container { flex-shrink: 0; height: 350px; min-height: 58px; display: flex; flex-direction: column; background-color: var(--background-color); border-top: 1px solid var(--border-color); }
+        .chat-container.minimized { height: 58px !important; }
+        .chat-header { display: flex; justify-content: space-between; align-items: center; padding: 0 10px 0 20px; height: 58px; box-sizing: border-box; flex-shrink: 0; transition: background-color 0.3s ease; }
+        .chat-container.minimized .chat-header { background-color: var(--primary-color); color: #000; }
+        .chat-title { font-weight: 600; }
+        .chat-controls button { background-color: rgba(0,0,0,0.2); border: none; color: white; cursor: pointer; border-radius: 50%; width: 36px; height: 36px; display:flex; align-items:center; justify-content:center; transition: transform 0.3s ease-in-out; }
+        .chat-controls button svg { width: 24px; height: 24px; stroke: white; stroke-width: 2; }
+        .chat-container.minimized .chat-controls button { background-color: rgba(255,255,255,0.2); }
+        .chat-container.minimized .chat-controls button svg { stroke: #000; }
+
+        .chat-messages { flex-grow: 1; overflow-y: auto; padding: 20px; }
+        .chat-container.minimized .chat-messages,
+        .chat-container.minimized .chat-input-container { display: none; }
+        
+        .chat-welcome-message { padding: 20px; text-align: center; color: var(--on-surface-variant-color); }
+        .chat-welcome-message h3 { margin-top: 0; color: var(--on-surface-color); }
+        .chat-welcome-message p { margin-bottom: 0; }
+        .chat-welcome-message code { display: block; background-color: var(--surface-color); padding: 8px; border-radius: 6px; margin-top: 10px; }
+
+        .message { max-width: 95%; padding: 10px 15px; border-radius: 18px; line-height: 1.5; word-wrap: break-word; margin-bottom: 10px;}
+        .message.user { background-color: var(--primary-color); color: #000; margin-left: auto; }
+        .message.aadi { background-color: #2c2c2e; margin-right: auto; }
+
+        .chat-input-container { display: flex; padding: 15px 20px; box-sizing: border-box; }
+        #message-input { flex-grow: 1; padding: 12px 18px; border: 1px solid var(--border-color); border-radius: 22px; background-color: #2c2c2e; color: var(--on-surface-color); font-size: 1rem; outline: none; }
+        #send-button { margin-left: 10px; padding: 0 20px; border: none; background-color: var(--primary-color); color: #000; border-radius: 22px; font-size: 1rem; font-weight: bold; cursor: pointer; }
+        #send-button:disabled { background-color: #00873a; opacity: 0.7; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <header class="page-header">
+        <img src="fi-logo.png" alt="Fi Money Logo" class="header-icon">
+        <div class="header-title">
+            <h1>Aadi - your personal finance co-pilot</h1>
+            <p>powered by Fi Money</p>
+        </div>
+    </header>
+
+    <div class="main-content">
+        <div class="dashboard-container" id="dashboard-container">
+            <div class="card" id="net-worth-card">
+                <div class="net-worth-gauge-container">
+                    <canvas id="netWorthGauge"></canvas>
+                </div>
+                <div id="net-worth-primary-value" class="net-worth-primary-value">Loading...</div>
+                <div class="net-worth-label">Net Worth</div>
+                <div class="net-worth-sub-metrics" id="net-worth-sub-metrics">
+                    <div class="sub-metric"><div class="value">...</div><div class="label">Total Assets</div></div>
+                    <div class="sub-metric"><div class="value">...</div><div class="label">Total Liabilities</div></div>
+                    <div class="sub-metric"><div class="value">...</div><div class="label">Credit Score</div></div>
+                </div>
+            </div>
+            <div class="card" id="assets-card"><h2 class="card-title">Assets Breakdown</h2><div class="chart-container"><canvas id="assetsChart"></canvas></div></div>
+            <div class="card" id="liabilities-card"><h2 class="card-title">Liabilities</h2><div class="chart-container"><canvas id="liabilitiesChart"></canvas></div></div>
+            <div class="card" id="epf-card"><h2 class="card-title">EPF History</h2><div class="chart-container"><canvas id="epfChart"></canvas></div></div>
+            <div class="card" id="transactions-card"><h2 class="card-title">Monthly Cashflow</h2><div class="chart-container"><canvas id="transactionsChart"></canvas></div></div>
+        </div>
+
+        <div class="resizer" id="resizer"></div>
+
+        <div class="chat-container minimized" id="chat-container">
+             <div class="chat-header">
+                <span class="chat-title">Chat with Aadi</span>
+                <div class="chat-controls">
+                    <button id="toggle-chat-btn" title="Open chat"></button>
+                </div>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-welcome-message" id="chat-welcome-message">
+                    <h3>Hello! I'm Aadi.</h3>
+                    <p>How can I help you with your finances today? You can ask me things like:</p>
+                    <code>"How is my portfolio performing?"</code>
+                    <code>"When can I reach a net worth of 1 Crore?"</code>
+                </div>
+            </div>
+            <form class="chat-input-container" id="chat-form">
+                <input type="text" id="message-input" placeholder="Chat with Aadi..." autocomplete="off">
+                <button id="send-button" type="submit">Send</button>
+            </form>
+        </div>
+    </div>
+    
+<script>
+    // --- GLOBAL VARIABLES & INITIALIZATION ---
+    let SESSION_ID = '123e4567-e89b-12d3-a456-426614174000';
+    const API_BASE_URL = 'http://127.0.0.1:8000';
+    const chartInstances = {};
+    let COLORS = {};
+    let CHART_COLORS = [];
+    let chatHasStarted = false;
+
+    const ICON_OPEN = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 6V18M18 12L6 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+    const ICON_CLOSE = `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const style = getComputedStyle(document.documentElement);
+        COLORS = {
+            primary: style.getPropertyValue('--primary-color').trim(),
+            border: style.getPropertyValue('--border-color').trim(),
+            onSurface: style.getPropertyValue('--on-surface-color').trim(),
+        };
+        CHART_COLORS = [
+            style.getPropertyValue('--chart-color-1').trim(), style.getPropertyValue('--chart-color-2').trim(),
+            style.getPropertyValue('--chart-color-3').trim(), style.getPropertyValue('--chart-color-4').trim(),
+            style.getPropertyValue('--chart-color-5').trim(), style.getPropertyValue('--chart-color-6').trim(),
+        ];
+        
+        Chart.defaults.color = COLORS.onSurface;
+        Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+
+        fetchDashboardData(SESSION_ID);
+        initializeChat();
+        initializeResizer();
+    });
+    
+    function initializeChat() {
+        const chatContainer = document.getElementById('chat-container');
+        const toggleBtn = document.getElementById('toggle-chat-btn');
+        const welcomeMessage = document.getElementById('chat-welcome-message');
+        const chatForm = document.getElementById('chat-form');
+        const messageInput = document.getElementById('message-input');
+
+        toggleBtn.innerHTML = ICON_OPEN;
+
+        toggleBtn.addEventListener('click', () => {
+            const isMinimized = chatContainer.classList.toggle('minimized');
+            toggleBtn.title = isMinimized ? 'Open chat' : 'Close chat';
+            toggleBtn.innerHTML = isMinimized ? ICON_OPEN : ICON_CLOSE;
+            
+            if (!isMinimized && chatHasStarted) {
+                welcomeMessage.style.display = 'none';
+            } else if (!isMinimized && !chatHasStarted) {
+                welcomeMessage.style.display = 'block';
+            }
+        });
+        
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userMessage = messageInput.value.trim();
+            if (!userMessage) return;
+
+            if (!chatHasStarted) {
+                chatHasStarted = true;
+                document.getElementById('chat-welcome-message').style.display = 'none';
+            }
+
+            appendChatMessage(userMessage, 'user');
+            messageInput.value = '';
+            toggleThinkingIndicator(true);
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: SESSION_ID, query: userMessage }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Network response was not ok.');
+                }
+                const data = await response.json();
+                appendChatMessage(data.response, 'aadi');
+            } catch (error) {
+                console.error("Chat Error:", error);
+                appendChatMessage(`Sorry, I'm having trouble connecting. Please try again.`, 'aadi');
+            } finally {
+                toggleThinkingIndicator(false);
+                messageInput.focus();
+            }
+        });
+    }
+
+    function initializeResizer() {
+        const resizer = document.getElementById('resizer');
+        const mainContent = document.querySelector('.main-content');
+        const chat = document.getElementById('chat-container');
+        resizer.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            document.body.style.cursor = 'ns-resize';
+            document.body.style.userSelect = 'none';
+            const onMouseMove = (moveEvent) => {
+                const mainContentRect = mainContent.getBoundingClientRect();
+                const newChatHeight = Math.min(
+                    Math.max(mainContentRect.bottom - moveEvent.clientY, 58),
+                    mainContentRect.height - 150
+                );
+                chat.style.height = `${newChatHeight}px`;
+            };
+            const onMouseUp = () => {
+                document.body.style.cursor = 'default';
+                document.body.style.userSelect = 'auto';
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
+    }
+    
+    function formatCurrency(value) {
+        if (value === null || value === undefined || isNaN(value)) return 'N/A';
+        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
+    }
+    
+    function toggleThinkingIndicator(isThinking) {
+        let thinkingDiv = document.getElementById('thinking-indicator');
+        const chatMessages = document.getElementById('chat-messages');
+        document.getElementById('message-input').disabled = isThinking;
+        document.getElementById('send-button').disabled = isThinking;
+
+        if (isThinking) {
+            if (!thinkingDiv) {
+                thinkingDiv = document.createElement('div');
+                thinkingDiv.id = 'thinking-indicator';
+                thinkingDiv.classList.add('message', 'aadi');
+                thinkingDiv.innerHTML = `<span>Thinking...</span>`;
+                chatMessages.appendChild(thinkingDiv);
+            }
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        } else {
+            if (thinkingDiv) thinkingDiv.remove();
+        }
+    }
+
+    function appendChatMessage(text, sender) {
+        const chatMessages = document.getElementById('chat-messages');
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('message', sender);
+        messageElement.textContent = text;
+        chatMessages.appendChild(messageElement);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    function destroyChart(chartId) {
+        if (chartInstances[chartId]) {
+            chartInstances[chartId].destroy();
+            delete chartInstances[chartId];
+        }
+    }
+
+    async function fetchDashboardData(sessionId) {
+        try {
+            const response = await fetch(`${API_BASE_URL}/dashboard_data?session_id=${sessionId}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const data = await response.json();
+            renderNetWorth(data.summary);
+            renderAssetsChart(data.holdings);
+            renderLiabilitiesChart(data.liabilities);
+            renderEpfChart(data.epf_details);
+            renderTransactionsChart(data.cashflow_summary);
+        } catch (error) {
+            console.error("Dashboard Fetch Error:", error);
+            const netWorthCard = document.getElementById('net-worth-card');
+            netWorthCard.innerHTML = `<div style="color:red;">Error loading dashboard data.</div>`;
+        }
+    }
+    
+    function renderNetWorth(summary) {
+        const netWorth = summary['Net Worth (INR)'] || 0;
+        const assets = summary['Total Assets (INR)'] || 0;
+        const liabilities = summary['Total Liabilities (INR)'] || 0;
+        const creditScore = summary['Credit Score'] || 'N/A';
+        
+        document.getElementById('net-worth-primary-value').textContent = formatCurrency(netWorth);
+        
+        const subMetricsContainer = document.getElementById('net-worth-sub-metrics');
+        subMetricsContainer.innerHTML = `
+            <div class="sub-metric"><div class="value">${formatCurrency(assets)}</div><div class="label">Total Assets</div></div>
+            <div class="sub-metric"><div class="value">${formatCurrency(liabilities)}</div><div class="label">Total Liabilities</div></div>
+            <div class="sub-metric"><div class="value">${creditScore}</div><div class="label">Credit Score</div></div>
+        `;
+
+        destroyChart('netWorthGauge');
+        const ctx = document.getElementById('netWorthGauge').getContext('2d');
+        const gaugeData = (assets > 0) ? [(netWorth / assets) * 100, 100 - ((netWorth / assets) * 100)] : [0, 100];
+        
+        chartInstances.netWorthGauge = new Chart(ctx, {
+            type: 'doughnut',
+            data: { datasets: [{ data: gaugeData, backgroundColor: [COLORS.primary, COLORS.border], borderColor: 'transparent', circumference: 180, rotation: 270 }] },
+            options: { responsive: true, maintainAspectRatio: true, cutout: '80%', plugins: { tooltip: { enabled: false } } }
+        });
+    }
+
+    function renderAssetsChart(holdingsData) {
+        if (!holdingsData || holdingsData.length === 0) return;
+        const assetSummary = holdingsData.reduce((acc, h) => {
+            const assetClass = h.asset_class || 'Other';
+            acc[assetClass] = (acc[assetClass] || 0) + (h.current_value || 0);
+            return acc;
+        }, {});
+        const labels = Object.keys(assetSummary);
+        const data = Object.values(assetSummary);
+        const totalAssets = data.reduce((sum, value) => sum + value, 0);
+
+        destroyChart('assetsChart');
+        const ctx = document.getElementById('assetsChart').getContext('2d');
+        chartInstances.assetsChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: { labels, datasets: [{ data, backgroundColor: CHART_COLORS }] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: true, position: 'bottom', labels: { color: COLORS.onSurface } },
+                    tooltip: {
+                        callbacks: {
+                            label: (c) => `${c.label}: ${formatCurrency(c.raw)} (${totalAssets > 0 ? ((c.raw / totalAssets) * 100).toFixed(1) : 0}%)`
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function renderLiabilitiesChart(liabilitiesData) {
+        if (!liabilitiesData || liabilitiesData.length === 0) return;
+        const labels = liabilitiesData.map(l => l.lender || 'N/A');
+        const data = liabilitiesData.map(l => l.outstanding || 0);
+        
+        destroyChart('liabilitiesChart');
+        const ctx = document.getElementById('liabilitiesChart').getContext('2d');
+        chartInstances.liabilitiesChart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Outstanding', data, backgroundColor: CHART_COLORS[1] }] },
+            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+        });
+    }
+
+    function renderEpfChart(epfData) {
+        if (!epfData || epfData.length === 0) return;
+        const labels = epfData.map(e => e.employer_name || 'N/A');
+        const data = epfData.map(e => e.balance || 0);
+
+        destroyChart('epfChart');
+        const ctx = document.getElementById('epfChart').getContext('2d');
+        chartInstances.epfChart = new Chart(ctx, {
+            type: 'bar',
+            data: { labels, datasets: [{ label: 'Balance', data, backgroundColor: CHART_COLORS[2] }] },
+            options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } } }
+        });
+    }
+
+    function renderTransactionsChart(cashflowSummary) {
+        if (!cashflowSummary || cashflowSummary.length === 0) return;
+        const labels = cashflowSummary.map(item => item.month);
+        destroyChart('transactionsChart');
+        const ctx = document.getElementById('transactionsChart').getContext('2d');
+        chartInstances.transactionsChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    { label: 'Credit', data: cashflowSummary.map(item => item.credit), backgroundColor: CHART_COLORS[0] },
+                    { label: 'Debit', data: cashflowSummary.map(item => item.debit), backgroundColor: CHART_COLORS[5] }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom' } } }
+        });
+    }
+</script>
+</body>
+</html>
